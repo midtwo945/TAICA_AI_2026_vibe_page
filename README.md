@@ -4,3 +4,5 @@
 課程網址：https://www.youtube.com/watch?v=vmQzpZvVqaI
 
 課程投影片：https://yenlung.me/1151GenAI
+
+網頁連結：https://midtwo945.github.io/TAICA_AI_2026_vibe_page
