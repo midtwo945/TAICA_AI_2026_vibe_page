@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>輪盤遊戲</title>
+<style>
+:root{
+  --bg:#f5f6fa; --card:#ffffff; --ink:#23283a; --muted:#6b7288; --line:#e3e6ef;
+  --accent:#4f6bed; --accent-ink:#ffffff; --accent-soft:#e8ecff; --danger:#d64545; --danger-soft:#fdecec;
+  --radius:14px; --shadow:0 1px 2px rgba(35,40,58,.06),0 6px 20px rgba(35,40,58,.06);
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei","Hiragino Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+body.lock{overflow:hidden}
+body.dragging-any{user-select:none;-webkit-user-select:none;cursor:grabbing}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.45}
+input{font-family:inherit;font-size:16px;color:var(--ink)}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid rgba(79,107,237,.45);outline-offset:2px}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;padding-top:calc(12px + env(safe-area-inset-top));background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.brand{font-size:20px;font-weight:700;letter-spacing:.02em;margin:0}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 16px;min-height:44px;font-weight:600;transition:background .15s,border-color .15s,transform .05s}
+.btn:hover:not(:disabled){background:#f0f2f8}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){background:#4059d6}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.danger:hover:not(:disabled){background:#bb3333}
+.btn.big{min-height:52px;padding:12px 28px;font-size:18px;border-radius:12px}
+.btn.sound[aria-pressed="false"]{color:var(--muted)}
+.banner{background:#fff4e0;border-bottom:1px solid #f0d9a8;color:#7a5200;padding:10px 20px;font-size:14px}
+.banner p{margin:2px 0}
+.banner.err{background:var(--danger-soft);border-color:#f0bcbc;color:#8f2525}
+
+/* ---------- Home ---------- */
+.home{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:20px;max-width:1280px;margin:0 auto;padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom));align-items:start}
+.home.with-editor{grid-template-columns:minmax(280px,340px) minmax(0,1fr) minmax(320px,400px)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.listpanel{display:flex;flex-direction:column}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel-head h2{font-size:17px;margin:0}
+.wlist{padding:10px;display:flex;flex-direction:column;gap:8px}
+.witem{display:flex;align-items:stretch;gap:4px;border:1px solid var(--line);border-radius:12px;background:#fff;transition:border-color .15s,background .15s}
+.witem.selected{border-color:var(--accent);background:var(--accent-soft)}
+.witem.dragging{position:relative;z-index:10;box-shadow:0 10px 30px rgba(35,40,58,.22);background:#fff;opacity:.97}
+.handle{flex:0 0 auto;width:44px;min-height:44px;border:0;background:transparent;color:var(--muted);touch-action:none;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:20px;border-radius:10px;user-select:none;-webkit-user-select:none}
+.handle:hover{color:var(--ink);background:rgba(35,40,58,.05)}
+.winfo{flex:1 1 auto;min-width:0;text-align:left;border:0;background:transparent;padding:10px 4px;display:flex;flex-direction:column;justify-content:center}
+.wt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.wm{font-size:13px;color:var(--muted)}
+.iconbtn{flex:0 0 auto;min-width:44px;min-height:44px;border:0;background:transparent;color:var(--muted);border-radius:10px;font-size:14px;padding:0 8px}
+.iconbtn:hover:not(:disabled){background:var(--danger-soft);color:var(--danger)}
+.empty{padding:36px 20px;text-align:center;color:var(--muted)}
+.empty h3{margin:0 0 6px;color:var(--ink);font-size:18px}
+.empty p{margin:0 0 18px}
+.playbar{border-top:1px solid var(--line);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:600;cursor:pointer;min-height:44px}
+.switch small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{flex:0 0 auto;width:48px;height:28px;border-radius:14px;background:#cfd4e2;position:relative;transition:background .15s}
+.track::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+.switch input:checked + .track{background:var(--accent)}
+.switch input:checked + .track::after{transform:translateX(20px)}
+.switch input:focus-visible + .track{outline:3px solid rgba(79,107,237,.45);outline-offset:2px}
+
+.previewpanel{padding:20px;display:flex;flex-direction:column;align-items:center;gap:12px;min-height:300px}
+.preview-title{font-size:22px;font-weight:700;text-align:center;margin:0;overflow-wrap:anywhere;max-width:100%}
+.preview-sub{margin:0;color:var(--muted);font-size:14px}
+.placeholder{margin:auto;color:var(--muted);text-align:center;padding:40px 10px}
+
+.wheel-wrap{position:relative;width:min(100%,520px);aspect-ratio:1/1;flex:0 0 auto}
+.wheel-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.pointer{position:absolute;left:50%;top:-2px;width:7%;height:8.5%;transform:translateX(-50%);background:#2b3047;clip-path:polygon(0 0,100% 0,50% 100%);filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));z-index:2}
+
+/* ---------- Editor ---------- */
+.editor{display:none;flex-direction:column;position:sticky;top:76px;max-height:calc(100vh - 96px)}
+.editor.open{display:flex}
+.ed-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top))}
+.ed-head h2{flex:1;margin:0;font-size:17px}
+.ed-body{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.field label,.field .lbl{display:block;font-weight:600;margin-bottom:6px;font-size:14px}
+.field input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;background:#fff}
+.field input.bad{border-color:var(--danger);background:var(--danger-soft)}
+.field .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:4px}
+.field .hint{color:var(--muted);font-size:13px;margin-top:4px}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;align-items:center;gap:4px;background:#fff;border-radius:10px}
+.opt.dragging{position:relative;z-index:10;box-shadow:0 8px 24px rgba(35,40,58,.22)}
+.opt input{flex:1 1 auto;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:44px}
+.swatch{flex:0 0 auto;width:10px;height:28px;border-radius:5px}
+.opthead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.opthead .lbl{margin:0}
+
+/* ---------- Play ---------- */
+.stage{max-width:760px;margin:0 auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:14px;min-height:calc(100vh - 70px)}
+.stage-title{font-size:clamp(22px,4.5vw,32px);font-weight:700;text-align:center;margin:8px 0 0;overflow-wrap:anywhere;max-width:100%}
+.progress{color:var(--muted);font-size:14px;margin:0}
+.stage .wheel-wrap{width:min(92vw,52vh,520px)}
+@supports (height:1dvh){.stage .wheel-wrap{width:min(92vw,52dvh,520px)}}
+.result{min-height:92px;width:min(100%,560px);border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);padding:12px 16px;text-align:center;visibility:hidden}
+.result.show{visibility:visible}
+.result .rl{font-size:13px;color:var(--muted)}
+.result .rv{font-size:clamp(22px,5vw,30px);font-weight:700;min-height:1.5em;overflow-wrap:anywhere;white-space:pre-wrap}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+
+/* ---------- Results ---------- */
+.results{max-width:720px;margin:0 auto;padding:20px 16px calc(28px + env(safe-area-inset-bottom))}
+.results h2{margin:8px 0 14px;font-size:24px}
+.rlist{list-style:none;margin:0 0 20px;padding:0;display:flex;flex-direction:column;gap:10px}
+.ritem{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow)}
+.ritem .rt{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.ritem .rr{font-size:22px;font-weight:700;min-height:1.5em;overflow-wrap:anywhere;white-space:pre-wrap}
+
+/* ---------- Modal / toast ---------- */
+.overlay{position:fixed;inset:0;background:rgba(25,29,45,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+.dialog{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.dialog h3{margin:0 0 8px;font-size:19px}
+.dialog p{margin:0 0 6px;color:var(--muted)}
+.dialog .detail{color:var(--ink);font-weight:700;overflow-wrap:anywhere;margin:6px 0 14px;padding:8px 12px;background:var(--bg);border-radius:8px;min-height:1.5em}
+.dialog .row{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2b3047;color:#fff;padding:10px 18px;border-radius:10px;z-index:120;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.3);font-size:15px}
+
+/* ---------- Mobile ---------- */
+@media (max-width:959px){
+  .home,.home.with-editor{grid-template-columns:minmax(0,1fr);padding:12px}
+  .editor{position:fixed;inset:0;top:0;max-height:none;z-index:60;border-radius:0;border:0;box-shadow:none}
+  .editor.open{display:flex}
+  .ed-body{flex:1 1 auto;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  .topbar{padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1 class="brand">輪盤遊戲</h1>
+  <button class="btn sound" id="soundBtn" type="button" aria-pressed="true">🔊 音效開</button>
+</header>
+<div id="banner" hidden></div>
+
+<main id="home" class="home">
+  <section class="panel listpanel" aria-label="輪盤清單">
+    <div class="panel-head">
+      <h2>輪盤清單</h2>
+      <button class="btn primary" id="addBtn" type="button">＋ 新增輪盤</button>
+    </div>
+    <div id="emptyState" class="empty" hidden>
+      <h3>還沒有輪盤</h3>
+      <p>新增第一個輪盤，開始設定題目與選項。</p>
+      <button class="btn primary big" id="addBtn2" type="button">新增輪盤</button>
+    </div>
+    <div id="wlist" class="wlist"></div>
+    <div class="playbar">
+      <label class="switch">
+        <span>一鍵結束模式<small>直接抽出全部結果，不播放動畫</small></span>
+        <input type="checkbox" id="oneClick">
+        <span class="track" aria-hidden="true"></span>
+      </label>
+      <button class="btn primary big" id="playBtn" type="button">開始播放</button>
+    </div>
+  </section>
+
+  <section class="panel previewpanel" aria-label="輪盤預覽">
+    <div id="previewEmpty" class="placeholder"></div>
+    <div id="previewBox" style="display:contents">
+      <h2 class="preview-title" id="pvTitle"></h2>
+      <p class="preview-sub" id="pvSub"></p>
+      <div class="wheel-wrap"><div class="pointer"></div><canvas id="pvCanvas" aria-label="輪盤靜態預覽"></canvas></div>
+    </div>
+  </section>
+
+  <aside class="panel editor" id="editor" aria-label="編輯輪盤"></aside>
+</main>
+
+<main id="play" class="stage" hidden>
+  <p class="progress" id="plProgress"></p>
+  <h2 class="stage-title" id="plTitle"></h2>
+  <div class="wheel-wrap"><div class="pointer"></div><canvas id="plCanvas" aria-label="輪盤"></canvas></div>
+  <div class="result" id="plResult" aria-live="polite"><div class="rl">抽中結果</div><div class="rv" id="plResultText"></div></div>
+  <div class="actions">
+    <button class="btn primary big" id="spinBtn" type="button">開始旋轉</button>
+    <button class="btn primary big" id="nextBtn" type="button" hidden>下一個輪盤</button>
+    <button class="btn big" id="homeBtn" type="button">返回首頁</button>
+  </div>
+</main>
+
+<main id="results" class="results" hidden>
+  <h2>抽選結果</h2>
+  <ol class="rlist" id="rlist"></ol>
+  <div class="actions">
+    <button class="btn big" id="rHomeBtn" type="button">返回首頁</button>
+    <button class="btn primary big" id="rAgainBtn" type="button">再轉一次</button>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+ * 常數與工具
+ * ===================================================================== */
+const KEY = 'roulette-game.v1';
+const SOUND_KEY = 'roulette-game.sound';
+const TAU = Math.PI * 2;
+const PALETTE = ['#ffd5d5','#ffe6c2','#fff3b8','#d8f0c4','#c2eee0','#c9e4ff','#d9d3ff','#f0d1f4','#ffd1e4','#d6e3ee'];
+const FONT = '"Noto Sans TC","PingFang TC","Microsoft JhengHei","Hiragino Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
+const $ = (s, r = document) => r.querySelector(s);
+const mod = (a, n) => ((a % n) + n) % n;
+
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'value') e.value = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids) if (c != null) e.append(c);
+  return e;
+}
+
+let uidCounter = 0;
+function uid(prefix) {
+  try { if (window.crypto && crypto.randomUUID) return prefix + crypto.randomUUID(); } catch (e) {}
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 10) + (++uidCounter).toString(36);
+}
+
+/* =====================================================================
+ * 抽選（公平、拒絕取樣）
+ * ===================================================================== */
+function randomInt(n) {
+  if (!Number.isInteger(n) || n < 1) throw new Error('randomInt: invalid n');
+  if (n === 1) return 0;
+  const c = window.crypto;
+  if (c && c.getRandomValues && n <= 0x100000000) {
+    const buf = new Uint32Array(1);
+    const limit = 0x100000000 - (0x100000000 % n);
+    for (let i = 0; i < 1000; i++) {
+      c.getRandomValues(buf);
+      if (buf[0] < limit) return buf[0] % n;
+    }
+  }
+  // 相容性備援（無 crypto 時）：以 Math.random 拒絕取樣 30 bit
+  const M = 0x40000000;
+  const lim = M - (M % n);
+  for (;;) {
+    const x = Math.floor(Math.random() * M);
+    if (x < lim) return x % n;
+  }
+}
+function rand01() {
+  try { const b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 0x100000000; }
+  catch (e) { return Math.random(); }
+}
+
+/* =====================================================================
+ * 資料層
+ * ===================================================================== */
+let wheels = [];
+let selectedId = null;
+let editOpen = false;
+let soundOn = true;
+let oneClick = false;      // 僅存在記憶體
+const bannerMsgs = { load: '', save: '' };
+
+function setBanner(kind, msg) { bannerMsgs[kind] = msg; renderBanner(); }
+function renderBanner() {
+  const b = $('#banner');
+  const msgs = [bannerMsgs.load, bannerMsgs.save].filter(Boolean);
+  b.replaceChildren();
+  if (!msgs.length) { b.hidden = true; return; }
+  b.hidden = false;
+  b.className = 'banner' + (bannerMsgs.save ? ' err' : '');
+  msgs.forEach(m => b.append(el('p', { text: m })));
+}
+
+function sanitize(d) {
+  if (!d || typeof d !== 'object' || !Array.isArray(d.wheels)) return null;
+  const seenW = new Set(), out = [];
+  for (const w of d.wheels) {
+    if (!w || typeof w !== 'object') continue;
+    let id = typeof w.id === 'string' && w.id ? w.id : uid('w_');
+    if (seenW.has(id)) id = uid('w_');
+    seenW.add(id);
+    const title = (typeof w.title === 'string' && w.title.trim() !== '') ? w.title : '新輪盤';
+    const secs = (Number.isInteger(w.seconds) && w.seconds >= 1 && w.seconds <= 30) ? w.seconds : 5;
+    const seenO = new Set(); const options = [];
+    if (Array.isArray(w.options)) for (const o of w.options) {
+      if (!o || typeof o !== 'object') continue;
+      let oid = typeof o.id === 'string' && o.id ? o.id : uid('o_');
+      if (seenO.has(oid)) oid = uid('o_');
+      seenO.add(oid);
+      options.push({ id: oid, text: typeof o.text === 'string' ? o.text : '' });
+    }
+    if (!options.length) options.push({ id: uid('o_'), text: '' });
+    out.push({ id, title, seconds: secs, options });
+  }
+  return out;
+}
+
+function loadData() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); }
+  catch (e) { setBanner('load', '無法讀取瀏覽器儲存空間，輪盤設定將無法保存。'); return []; }
+  if (raw == null) return [];
+  try {
+    const r = sanitize(JSON.parse(raw));
+    if (r) return r;
+  } catch (e) {}
+  try { localStorage.setItem(KEY + '.backup', raw); } catch (e) {}
+  setBanner('load', '已儲存的資料格式異常，已改用空白設定（原始資料已備份於 ' + KEY + '.backup）。');
+  return [];
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ v: 1, wheels }));
+    if (bannerMsgs.save) setBanner('save', '');
+    return true;
+  } catch (e) {
+    setBanner('save', '儲存失敗：瀏覽器無法寫入儲存空間，目前的修改在重新整理後可能不會保留。');
+    return false;
+  }
+}
+function loadSound() { try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch (e) { return true; } }
+function saveSound() { try { localStorage.setItem(SOUND_KEY, soundOn ? '1' : '0'); } catch (e) {} }
+
+const getWheel = id => wheels.find(w => w.id === id) || null;
+const selected = () => getWheel(selectedId);
+
+/* =====================================================================
+ * 音效（Web Audio 合成）
+ * ===================================================================== */
+const SFX = {
+  ctx: null,
+  init() {
+    if (this.ctx) return this.ctx;
+    try { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; this.ctx = new AC(); }
+    catch (e) { return null; }
+    return this.ctx;
+  },
+  resume() {
+    const c = this.init();
+    if (c && c.state === 'suspended') { try { const p = c.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  },
+  tone(freq, start, dur, type, vol) {
+    const c = this.ctx; if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, start);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(vol, start + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(start); o.stop(start + dur + 0.02);
+  },
+  tick(speed) {
+    if (!soundOn) return;
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    try { this.tone(420 + Math.min(1, speed) * 520, c.currentTime, 0.05, 'triangle', 0.1); } catch (e) {}
+  },
+  chime() {
+    if (!soundOn) return;
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    try {
+      const t = c.currentTime;
+      this.tone(784, t, 0.35, 'sine', 0.16);
+      this.tone(1047, t + 0.14, 0.55, 'sine', 0.16);
+    } catch (e) {}
+  }
+};
+
+/* =====================================================================
+ * 繪圖（Canvas，離屏快取＋旋轉貼圖）
+ * ===================================================================== */
+const baseCache = new WeakMap();
+
+function layoutFonts(ctx, options, R) {
+  const n = options.length, step = TAU / n;
+  const r1 = R * 0.93, r0 = R * 0.2, L = r1 - r0;
+  const t = Math.tan(Math.min(step / 2, 1.2));
+  const maxF = R * 0.14;
+  ctx.font = '100px ' + FONT;
+  return options.map(o => {
+    const txt = o.text.replace(/[\r\n\t]+/g, ' ');
+    if (txt.trim() === '') return 0;
+    const u = ctx.measureText(txt).width / 100;
+    if (!(u > 0)) return 0;
+    let f = Math.min(maxF, L / u, (1.8 * r1 * t) / (1 + 1.8 * u * t));
+    return f >= 9 ? f : 0;
+  });
+}
+
+function renderBase(options, px, dpr) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = px;
+  const ctx = cv.getContext('2d');
+  const S = px / dpr;
+  ctx.scale(dpr, dpr);
+  const cx = S / 2, cy = S / 2, R = S / 2 - S * 0.02;
+  const n = options.length, step = TAU / n;
+  const fonts = layoutFonts(ctx, options, R);
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < n; i++) {
+    const a0 = -Math.PI / 2 + i * step, a1 = a0 + step;
+    ctx.beginPath();
+    if (n > 1) ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, a0, a1);
+    if (n > 1) ctx.closePath();
+    ctx.fillStyle = PALETTE[i % PALETTE.length];
+    ctx.fill();
+    if (n > 1 && step * R > 5) { ctx.lineWidth = Math.max(1, S * 0.004); ctx.strokeStyle = '#ffffff'; ctx.stroke(); }
+  }
+  // 文字
+  ctx.fillStyle = '#2a2f45';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) {
+    const f = fonts[i]; if (!f) continue;
+    const txt = options[i].text.replace(/[\r\n\t]+/g, ' ');
+    const ang = -Math.PI / 2 + (i + 0.5) * step;
+    const flip = Math.cos(ang) < -1e-9;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.font = '600 ' + f.toFixed(2) + 'px ' + FONT;
+    if (flip) { ctx.rotate(Math.PI); ctx.textAlign = 'left'; ctx.fillText(txt, -R * 0.93, 0); }
+    else { ctx.textAlign = 'right'; ctx.fillText(txt, R * 0.93, 0); }
+    ctx.restore();
+  }
+  // 外環與中心
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU);
+  ctx.lineWidth = Math.max(2, S * 0.01); ctx.strokeStyle = '#ffffff'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R * 0.08, 0, TAU);
+  ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.lineWidth = Math.max(1, S * 0.004); ctx.strokeStyle = '#d5d9e6'; ctx.stroke();
+  return cv;
+}
+
+function drawWheel(canvas, options, theta) {
+  const wrap = canvas.parentElement;
+  const css = wrap ? wrap.clientWidth : 0;
+  if (!css || !options || !options.length) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const px = Math.max(2, Math.round(css * dpr));
+  if (canvas.width !== px || canvas.height !== px) { canvas.width = px; canvas.height = px; }
+  const sig = px + '|' + dpr + '|' + options.length + '|' + options.map(o => o.text).join('\u0001');
+  let cache = baseCache.get(canvas);
+  if (!cache || cache.sig !== sig) {
+    cache = { sig, base: renderBase(options, px, dpr) };
+    baseCache.set(canvas, cache);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, px, px);
+  ctx.translate(px / 2, px / 2);
+  ctx.rotate(theta);
+  ctx.drawImage(cache.base, -px / 2, -px / 2);
+}
+
+/* =====================================================================
+ * 對話框 / 提示
+ * ===================================================================== */
+function confirmDialog({ title, message, detail, okText, cancelText, danger }) {
+  return new Promise(resolve => {
+    const prevFocus = document.activeElement;
+    const done = v => { document.removeEventListener('keydown', onKey, true); ov.remove(); if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (e) {} } resolve(v); };
+    const cancel = el('button', { class: 'btn', type: 'button', text: cancelText || '取消', onclick: () => done(false) });
+    const ok = el('button', { class: 'btn ' + (danger ? 'danger' : 'primary'), type: 'button', text: okText || '確認', onclick: () => done(true) });
+    const dlg = el('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+      el('h3', { text: title }),
+      message ? el('p', { text: message }) : null,
+      detail != null ? el('div', { class: 'detail', text: detail }) : null,
+      el('div', { class: 'row' }, cancel, ok));
+    const ov = el('div', { class: 'overlay', onclick: ev => { if (ev.target === ov) done(false); } }, dlg);
+    const onKey = ev => { if (ev.key === 'Escape') { ev.stopPropagation(); done(false); } };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(ov);
+    cancel.focus();
+  });
+}
+let toastTimer = 0;
+function toast(msg) {
+  const old = $('.toast'); if (old) old.remove();
+  const t = el('div', { class: 'toast', role: 'status', text: msg });
+  document.body.append(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 3000);
+}
+
+/* =====================================================================
+ * 拖曳排序（Pointer Events）
+ * ===================================================================== */
+function scrollParent(node) {
+  for (let p = node.parentElement; p && p !== document.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+function makeSortable(container, { itemSel, handleSel, onReorder }) {
+  const idsOf = () => [...container.children].filter(c => c.matches(itemSel)).map(c => c.dataset.id);
+  container.addEventListener('pointerdown', e => {
+    const handle = e.target.closest(handleSel);
+    if (!handle || !container.contains(handle)) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const item = handle.closest(itemSel);
+    if (!item || !container.contains(item)) return;
+    e.preventDefault();
+    const sp = scrollParent(container);
+    const isDoc = sp === document.scrollingElement || sp === document.documentElement;
+    const startOrder = idsOf();
+    const startNodes = [...container.children];
+    const grab = e.clientY - item.getBoundingClientRect().top;
+    const pid = e.pointerId;
+    let y = e.clientY, raf = 0, active = true;
+    item.classList.add('dragging');
+    document.body.classList.add('dragging-any');
+
+    const update = () => {
+      item.style.transform = '';
+      let nat = item.getBoundingClientRect();
+      const desired = y - grab;
+      const center = desired + nat.height / 2;
+      for (let guard = 0; guard < 5000; guard++) {
+        const prev = item.previousElementSibling;
+        if (prev && prev.matches(itemSel)) {
+          const r = prev.getBoundingClientRect();
+          if (center < r.top + r.height / 2) { container.insertBefore(item, prev); nat = item.getBoundingClientRect(); continue; }
+        }
+        const next = item.nextElementSibling;
+        if (next && next.matches(itemSel)) {
+          const r = next.getBoundingClientRect();
+          if (center > r.top + r.height / 2) { container.insertBefore(item, next.nextSibling); nat = item.getBoundingClientRect(); continue; }
+        }
+        break;
+      }
+      item.style.transform = 'translateY(' + (desired - nat.top) + 'px)';
+    };
+    const loop = () => {
+      if (!active) return;
+      const r = isDoc ? { top: 0, bottom: window.innerHeight } : sp.getBoundingClientRect();
+      let d = 0;
+      if (y < r.top + 56) d = -Math.min(24, Math.ceil((r.top + 56 - y) / 3));
+      else if (y > r.bottom - 56) d = Math.min(24, Math.ceil((y - (r.bottom - 56)) / 3));
+      if (d) sp.scrollTop += d;
+      update();
+      raf = requestAnimationFrame(loop);
+    };
+    const move = ev => { if (ev.pointerId !== pid) return; y = ev.clientY; };
+    const block = ev => { if (ev.cancelable) ev.preventDefault(); };
+    const finish = (ev, cancelled) => {
+      if (ev.pointerId !== pid || !active) return;
+      active = false;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('touchmove', block);
+      item.style.transform = '';
+      item.classList.remove('dragging');
+      document.body.classList.remove('dragging-any');
+      if (cancelled) { startNodes.forEach(n => container.append(n)); return; }
+      const now = idsOf();
+      if (now.join('\u0001') !== startOrder.join('\u0001')) onReorder(now);
+    };
+    const up = ev => finish(ev, false);
+    const cancel = ev => finish(ev, true);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('touchmove', block, { passive: false });
+    update();
+    raf = requestAnimationFrame(loop);
+  });
+}
+
+function reorderBy(list, ids) {
+  if (ids.length !== list.length) return null;
+  const map = new Map(list.map(x => [x.id, x]));
+  if (map.size !== list.length) return null;
+  const out = [];
+  for (const id of ids) { const x = map.get(id); if (!x) return null; out.push(x); map.delete(id); }
+  return out;
+}
+
+/* =====================================================================
+ * 首頁：清單
+ * ===================================================================== */
+const els = {
+  home: $('#home'), play: $('#play'), results: $('#results'),
+  wlist: $('#wlist'), empty: $('#emptyState'), playBtn: $('#playBtn'),
+  editor: $('#editor'), pvTitle: $('#pvTitle'), pvSub: $('#pvSub'), pvCanvas: $('#pvCanvas'),
+  pvEmpty: $('#previewEmpty'), pvBox: $('#previewBox')
+};
+let view = 'home';
+
+function wheelMeta(w) { return w.options.length + ' 個選項・' + w.seconds + ' 秒'; }
+
+function listItem(w) {
+  const info = el('button', { class: 'winfo', type: 'button', onclick: () => selectWheel(w.id, true) },
+    el('span', { class: 'wt', text: w.title }),
+    el('span', { class: 'wm', text: wheelMeta(w) }));
+  const row = el('div', { class: 'witem' + (w.id === selectedId ? ' selected' : ''), 'data-id': w.id },
+    el('button', { class: 'handle', type: 'button', 'aria-label': '拖曳以調整順序', title: '拖曳排序', text: '⠿' }),
+    info,
+    el('button', { class: 'iconbtn', type: 'button', 'aria-label': '刪除輪盤', title: '刪除', text: '刪除', onclick: () => askDeleteWheel(w.id) }));
+  return row;
+}
+function renderList() {
+  els.wlist.replaceChildren(...wheels.map(listItem));
+  els.empty.hidden = wheels.length > 0;
+  els.wlist.hidden = wheels.length === 0;
+  els.playBtn.disabled = wheels.length === 0;
+}
+function updateListItem(w) {
+  const row = els.wlist.querySelector('[data-id="' + CSS.escape(w.id) + '"]');
+  if (!row) return;
+  row.querySelector('.wt').textContent = w.title;
+  row.querySelector('.wm').textContent = wheelMeta(w);
+}
+function markSelected() {
+  els.wlist.querySelectorAll('.witem').forEach(r => r.classList.toggle('selected', r.dataset.id === selectedId));
+}
+
+function renderPreview() {
+  const w = selected();
+  if (!w) {
+    els.pvBox.hidden = true; els.pvBox.style.display = 'none';
+    els.pvEmpty.hidden = false;
+    els.pvEmpty.textContent = wheels.length ? '點選左側的輪盤即可預覽與編輯。' : '新增輪盤後，這裡會顯示靜態預覽。';
+    return;
+  }
+  els.pvEmpty.hidden = true;
+  els.pvBox.hidden = false; els.pvBox.style.display = 'contents';
+  els.pvTitle.textContent = w.title;
+  els.pvSub.textContent = '靜態預覽・' + w.options.length + ' 個選項';
+  drawWheel(els.pvCanvas, w.options, 0);
+}
+
+function selectWheel(id, openEditor) {
+  selectedId = id;
+  if (openEditor) editOpen = true;
+  markSelected();
+  renderPreview();
+  renderEditor();
+  syncLayout();
+}
+function syncLayout() {
+  els.home.classList.toggle('with-editor', editOpen && !!selected());
+  document.body.classList.toggle('lock', view === 'home' && editOpen && !!selected() && window.matchMedia('(max-width:959px)').matches);
+}
+
+function addWheel() {
+  const w = { id: uid('w_'), title: '新輪盤', seconds: 5, options: [{ id: uid('o_'), text: '' }, { id: uid('o_'), text: '' }] };
+  wheels.push(w);
+  save();
+  selectedId = w.id; editOpen = true;
+  renderList(); renderPreview(); renderEditor(); syncLayout();
+  const row = els.wlist.querySelector('[data-id="' + CSS.escape(w.id) + '"]');
+  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+}
+
+async function askDeleteWheel(id) {
+  const w = getWheel(id); if (!w) return;
+  const ok = await confirmDialog({ title: '刪除輪盤', message: '確定要刪除這個輪盤及其全部選項嗎？此動作無法復原。', detail: w.title, okText: '確認刪除', cancelText: '取消', danger: true });
+  if (!ok) return;
+  const idx = wheels.findIndex(x => x.id === id);
+  if (idx < 0) return;
+  wheels.splice(idx, 1);
+  save();
+  if (selectedId === id) {
+    editOpen = false;
+    selectedId = wheels.length ? wheels[Math.min(idx, wheels.length - 1)].id : null;
+  }
+  renderList(); renderPreview(); renderEditor(); syncLayout();
+}
+
+makeSortable(els.wlist, {
+  itemSel: '.witem', handleSel: '.handle',
+  onReorder: ids => {
+    const r = reorderBy(wheels, ids);
+    if (!r) { renderList(); return; }
+    wheels = r; save(); renderList();
+  }
+});
+
+/* =====================================================================
+ * 首頁：編輯面板
+ * ===================================================================== */
+function closeEditor() {
+  editOpen = false;
+  renderEditor(); syncLayout();
+  const a = document.activeElement; if (a && a.blur) a.blur();
+}
+
+function renderEditor() {
+  const w = selected();
+  const ed = els.editor;
+  ed.classList.toggle('open', !!(w && editOpen));
+  ed.replaceChildren();
+  if (!w || !editOpen) return;
+
+  const titleErr = el('div', { class: 'err', 'aria-live': 'polite' });
+  const titleIn = el('input', { type: 'text', id: 'edTitle', value: w.title, autocomplete: 'off', 'aria-describedby': 'edTitleErr' });
+  titleErr.id = 'edTitleErr';
+  titleIn.addEventListener('input', () => {
+    if (titleIn.value.trim() === '') { titleIn.classList.add('bad'); titleErr.textContent = '題目不可空白，請輸入文字。'; return; }
+    titleIn.classList.remove('bad'); titleErr.textContent = '';
+    w.title = titleIn.value; save(); updateListItem(w); els.pvTitle.textContent = w.title;
+  });
+  titleIn.addEventListener('blur', () => {
+    if (titleIn.value.trim() === '') { titleIn.value = w.title; titleIn.classList.remove('bad'); titleErr.textContent = ''; }
+  });
+
+  const secErr = el('div', { class: 'err', 'aria-live': 'polite' });
+  const secIn = el('input', { type: 'text', id: 'edSecs', inputmode: 'numeric', value: String(w.seconds), autocomplete: 'off' });
+  secIn.addEventListener('input', () => {
+    const v = secIn.value.trim();
+    const n = /^\d+$/.test(v) ? parseInt(v, 10) : NaN;
+    if (!(n >= 1 && n <= 30)) { secIn.classList.add('bad'); secErr.textContent = '旋轉秒數必須是 1～30 的整數。'; return; }
+    secIn.classList.remove('bad'); secErr.textContent = '';
+    w.seconds = n; save(); updateListItem(w);
+  });
+  secIn.addEventListener('blur', () => {
+    if (!/^\d+$/.test(secIn.value.trim()) || +secIn.value < 1 || +secIn.value > 30) {
+      secIn.value = String(w.seconds); secIn.classList.remove('bad'); secErr.textContent = '';
+    }
+  });
+
+  const optsEl = el('div', { class: 'opts', id: 'optList' });
+  const optCount = el('span', { class: 'lbl' });
+
+  function buildOptions() {
+    optsEl.replaceChildren();
+    const only = w.options.length === 1;
+    w.options.forEach((o, i) => {
+      const inp = el('input', { type: 'text', value: o.text, placeholder: '（空白選項）', autocomplete: 'off', 'aria-label': '選項 ' + (i + 1) });
+      inp.addEventListener('input', () => { o.text = inp.value; save(); drawWheel(els.pvCanvas, w.options, 0); });
+      const del = el('button', { class: 'iconbtn', type: 'button', text: only ? '清空' : '刪除', 'aria-label': only ? '清空此選項文字' : '刪除此選項',
+        onclick: () => {
+          if (w.options.length > 1) {
+            const k = w.options.findIndex(x => x.id === o.id);
+            if (k >= 0) w.options.splice(k, 1);
+            save(); buildOptions(); afterOptionChange();
+          } else {
+            o.text = ''; inp.value = ''; save(); afterOptionChange(); inp.focus();
+          }
+        } });
+      optsEl.append(el('div', { class: 'opt', 'data-id': o.id },
+        el('button', { class: 'handle', type: 'button', 'aria-label': '拖曳以調整選項順序', title: '拖曳排序', text: '⠿' }),
+        el('span', { class: 'swatch', style: 'background:' + PALETTE[i % PALETTE.length], 'aria-hidden': 'true' }),
+        inp, del));
+    });
+    optCount.textContent = '選項（' + w.options.length + '）';
+  }
+  function afterOptionChange() {
+    optCount.textContent = '選項（' + w.options.length + '）';
+    updateListItem(w);
+    els.pvSub.textContent = '靜態預覽・' + w.options.length + ' 個選項';
+    drawWheel(els.pvCanvas, w.options, 0);
+  }
+  buildOptions();
+  makeSortable(optsEl, {
+    itemSel: '.opt', handleSel: '.handle',
+    onReorder: ids => {
+      const r = reorderBy(w.options, ids);
+      if (!r) { buildOptions(); return; }
+      w.options = r; save(); buildOptions(); afterOptionChange();
+    }
+  });
+
+  const addOpt = el('button', { class: 'btn', type: 'button', text: '＋ 新增選項',
+    onclick: () => {
+      w.options.push({ id: uid('o_'), text: '' });
+      save(); buildOptions(); afterOptionChange();
+      const inputs = optsEl.querySelectorAll('input');
+      const last = inputs[inputs.length - 1];
+      if (last) { last.scrollIntoView({ block: 'nearest' }); last.focus({ preventScroll: true }); }
+    } });
+
+  const head = el('div', { class: 'ed-head' },
+    el('button', { class: 'btn', type: 'button', text: '← 返回', 'aria-label': '關閉編輯', onclick: closeEditor }),
+    el('h2', { text: '編輯輪盤' }));
+  const body = el('div', { class: 'ed-body' },
+    el('div', { class: 'field' }, el('label', { for: 'edTitle', text: '題目' }), titleIn, titleErr),
+    el('div', { class: 'field' }, el('label', { for: 'edSecs', text: '旋轉秒數（1～30 的整數）' }), secIn, secErr),
+    el('div', { class: 'field' },
+      el('div', { class: 'opthead' }, optCount),
+      optsEl,
+      el('div', { class: 'hint', text: '空白與重複的選項都有效，每個選項機率相同。' })),
+    addOpt);
+  ed.append(head, body);
+}
+
+/* =====================================================================
+ * 播放流程
+ * ===================================================================== */
+let play = null;   // 僅存在記憶體：{wheels, index, phase, theta, pick, results, token, raf}
+let tokenSeq = 0;
+
+function showView(v) {
+  view = v;
+  els.home.hidden = v !== 'home';
+  els.play.hidden = v !== 'play';
+  els.results.hidden = v !== 'results';
+  syncLayout();
+  window.scrollTo(0, 0);
+  requestAnimationFrame(redrawAll);
+}
+
+function validateAll() {
+  for (const w of wheels) {
+    if (typeof w.title !== 'string' || w.title.trim() === '') return { w, msg: '有輪盤的題目是空白，請先修正。' };
+    if (!Number.isInteger(w.seconds) || w.seconds < 1 || w.seconds > 30) return { w, msg: '有輪盤的旋轉秒數無效，請先修正。' };
+    if (!w.options.length) return { w, msg: '有輪盤沒有任何選項，請先修正。' };
+  }
+  return null;
+}
+function snapshot() {
+  return wheels.map(w => ({ id: w.id, title: w.title, seconds: w.seconds, options: w.options.map(o => ({ id: o.id, text: o.text })) }));
+}
+
+function startPlay() {
+  if (!wheels.length) return;
+  const bad = validateAll();
+  if (bad) { toast(bad.msg); selectWheel(bad.w.id, true); return; }
+  SFX.resume();
+  const snap = snapshot();
+  if (oneClick) {
+    // 一鍵結束：與正常模式使用相同的 randomInt，依清單順序
+    const results = snap.map(w => { const o = w.options[randomInt(w.options.length)]; return { title: w.title, text: o.text }; });
+    play = { results, mode: 'oneclick' };
+    renderResults();
+    showView('results');
+  } else {
+    beginNormal(snap);
+  }
+}
+function beginNormal(snap) {
+  play = { wheels: snap, index: 0, phase: 'idle', theta: 0, pick: null, results: [], token: ++tokenSeq, raf: 0, mode: 'normal' };
+  renderPlay();
+  showView('play');
+}
+
+function renderPlay() {
+  if (!play || !play.wheels) return;
+  const w = play.wheels[play.index];
+  const last = play.index === play.wheels.length - 1;
+  $('#plProgress').textContent = '第 ' + (play.index + 1) + ' / ' + play.wheels.length + ' 個輪盤';
+  $('#plTitle').textContent = w.title;
+  const done = play.phase === 'done';
+  const res = $('#plResult');
+  res.classList.toggle('show', done);
+  $('#plResultText').textContent = done ? play.results[play.index].text : '';
+  $('#spinBtn').hidden = done;
+  $('#spinBtn').disabled = play.phase !== 'idle';
+  const next = $('#nextBtn');
+  next.hidden = !done;
+  next.textContent = last ? '查看全部結果' : '下一個輪盤';
+  $('#homeBtn').disabled = play.phase === 'spinning';
+  drawWheel($('#plCanvas'), w.options, play.theta);
+}
+
+function sliceAt(theta, n) {
+  const step = TAU / n;
+  return Math.min(n - 1, Math.floor(mod(-theta, TAU) / step));
+}
+
+function startSpin() {
+  if (!play || play.phase !== 'idle') return;      // 防止重複觸發
+  play.phase = 'spinning';
+  SFX.resume();
+  const w = play.wheels[play.index];
+  const n = w.options.length;
+  const pick = randomInt(n);                       // 先決定結果
+  play.pick = pick;
+  const step = TAU / n;
+  const jitter = (rand01() - 0.5) * 0.7 * step;    // 落點在扇形內部，不貼邊界
+  const target = -(pick + 0.5) * step + jitter;
+  const turns = Math.max(3, w.seconds + 2);
+  const from = play.theta;
+  const delta = mod(target - from, TAU) + turns * TAU;
+  const dur = w.seconds * 1000;
+  const token = play.token;
+  const canvas = $('#plCanvas');
+  const t0 = performance.now();
+  let lastSlice = sliceAt(from, n), lastTick = 0, lastTh = from, lastT = t0;
+  renderPlay();
+  const frame = now => {
+    if (!play || play.token !== token || play.phase !== 'spinning') return;
+    const t = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - t, 3);              // 先快後慢的緩出
+    const th = t >= 1 ? from + delta : from + delta * e;
+    play.theta = th;
+    drawWheel(canvas, w.options, th);
+    const s = sliceAt(th, n);
+    if (s !== lastSlice) {
+      lastSlice = s;
+      if (now - lastTick >= 28) {
+        const dt = Math.max(1, now - lastT);
+        const revPerSec = Math.abs(th - lastTh) / TAU / (dt / 1000);
+        SFX.tick(revPerSec / 6);
+        lastTick = now;
+      }
+    }
+    lastTh = th; lastT = now;
+    if (t < 1) play.raf = requestAnimationFrame(frame);
+    else finishSpin();
+  };
+  play.raf = requestAnimationFrame(frame);
+}
+
+function finishSpin() {
+  if (!play) return;
+  const w = play.wheels[play.index];
+  const opt = w.options[play.pick];
+  play.results[play.index] = { title: w.title, text: opt.text, optionId: opt.id };
+  play.phase = 'done';                              // 明確狀態，不以空字串判斷
+  SFX.chime();
+  renderPlay();
+}
+
+function nextWheel() {
+  if (!play || play.phase !== 'done') return;
+  if (play.index >= play.wheels.length - 1) {
+    play = { results: play.results.map(r => ({ title: r.title, text: r.text })), mode: 'normal' };
+    renderResults();
+    showView('results');
+    return;
+  }
+  play.index++; play.phase = 'idle'; play.theta = 0; play.pick = null;
+  renderPlay();
+}
+
+async function backHomeFromPlay() {
+  if (!play || play.phase === 'spinning') return;
+  const ok = await confirmDialog({ title: '返回首頁', message: '返回首頁將中止目前的播放，並捨棄本輪已抽出的結果。輪盤設定會保留。', okText: '確認返回', cancelText: '取消' });
+  if (!ok) return;
+  if (!play || play.phase === 'spinning') return;
+  if (play.raf) cancelAnimationFrame(play.raf);
+  play = null;
+  showView('home');
+  renderPreview();
+}
+
+function renderResults() {
+  const list = $('#rlist');
+  list.replaceChildren();
+  if (!play) return;
+  play.results.forEach(r => {
+    list.append(el('li', { class: 'ritem' },
+      el('div', { class: 'rt', text: r.title }),
+      el('div', { class: 'rr', text: r.text })));
+  });
+}
+
+function goHomeFromResults() { play = null; showView('home'); renderPreview(); }
+function again() {
+  if (!wheels.length) { goHomeFromResults(); return; }
+  const bad = validateAll();
+  if (bad) { toast(bad.msg); goHomeFromResults(); return; }
+  SFX.resume();
+  play = null;                                      // 清除上一輪結果
+  beginNormal(snapshot());
+}
+
+/* =====================================================================
+ * 事件與初始化
+ * ===================================================================== */
+function redrawAll() {
+  if (view === 'home') renderPreview();
+  else if (view === 'play' && play && play.wheels) drawWheel($('#plCanvas'), play.wheels[play.index].options, play.theta);
+}
+function renderSoundBtn() {
+  const b = $('#soundBtn');
+  b.textContent = soundOn ? '🔊 音效開' : '🔇 音效關';
+  b.setAttribute('aria-pressed', String(soundOn));
+}
+
+$('#addBtn').addEventListener('click', addWheel);
+$('#addBtn2').addEventListener('click', addWheel);
+$('#playBtn').addEventListener('click', startPlay);
+$('#oneClick').addEventListener('change', e => { oneClick = e.target.checked; });
+$('#soundBtn').addEventListener('click', () => {
+  soundOn = !soundOn; saveSound(); renderSoundBtn();
+  if (soundOn) SFX.resume();
+});
+$('#spinBtn').addEventListener('click', startSpin);
+$('#nextBtn').addEventListener('click', nextWheel);
+$('#homeBtn').addEventListener('click', backHomeFromPlay);
+$('#rHomeBtn').addEventListener('click', goHomeFromResults);
+$('#rAgainBtn').addEventListener('click', again);
+
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => redrawAll());
+  document.querySelectorAll('.wheel-wrap').forEach(n => ro.observe(n));
+}
+window.addEventListener('resize', () => { syncLayout(); redrawAll(); });
+
+// 啟動：一律回到首頁；一鍵結束預設關閉；音效還原
+soundOn = loadSound();
+renderSoundBtn();
+wheels = loadData();
+$('#oneClick').checked = false;
+selectedId = wheels.length ? wheels[0].id : null;
+editOpen = false;
+renderList(); renderPreview(); renderEditor(); syncLayout();
+})();
+</script>
+</body>
+</html>
